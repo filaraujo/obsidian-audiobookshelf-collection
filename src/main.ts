@@ -19,7 +19,7 @@ export default class AudiobookshelfPlugin extends Plugin {
 			},
 		});
 
-		this.addRibbonIcon("book-open", "Generate series note", () => {
+		this.addRibbonIcon("library-big", "Generate series note", () => {
 			void generateSeriesNote(this);
 		});
 	}

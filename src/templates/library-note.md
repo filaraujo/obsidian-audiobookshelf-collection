@@ -2,15 +2,13 @@
 createdAt: "{{generatedAt}}"
 serverUrl: "{{serverUrl}}"
 ---
-# {{libraryTitle}} series
-{{seriesCount}} series
+# All Series
+**Series:** {{ seriesCount }} · **Books:** {{ bookCount }} · **Duration:** {{ totalDurationHours }} h
 
 {{#each series}}
 
-> [!book-open]+ [[{{seriesNotePath}}|{{name}}]]
->
-> Books: {{finishedBookCount}} / {{bookCount}}
-> Duration: {{progressDurationHours}} h / {{totalDurationHours}} h
+> [!series]+ [[{{seriesNotePath}}|{{name}}]]
+> **Books:** {{finishedBookCount}} / {{bookCount}} · **Duration:** {{progressDurationHours}} h / {{totalDurationHours}} h
 >
 > {{#each books}}
 > :{{statusIcon}}: **{{title}}** by {{authorName}} · {{statusLabel}}

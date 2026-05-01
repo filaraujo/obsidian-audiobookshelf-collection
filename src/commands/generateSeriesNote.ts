@@ -10,6 +10,9 @@ interface RenderedBook {
 	id: string;
 	title: string;
 	description: string;
+	/** Absolute Audiobookshelf URL for this book's cover (`/api/items/:id/cover`; matches `coverUrl`). */
+	imageUrl: string;
+	/** Same as `imageUrl`; kept so existing custom templates using `coverUrl` still work. */
 	coverUrl: string;
 	authorName: string;
 	publishedYear: string;
@@ -41,6 +44,13 @@ interface TemplateContext {
 	serverUrl: string;
 	libraryCount: number;
 	seriesCount: number;
+	/** All books in this library rollup (sum of each series’ books; a title in multiple series is counted multiple times). */
+	bookCount: number;
+	finishedBookCount: number;
+	/** Sum of each series’ total duration (same double-count caveat as `bookCount` if a book appears in multiple series). */
+	totalDurationHours: string;
+	/** Sum of each series’ capped listening progress, in hours (1 decimal). */
+	progressDurationHours: string;
 	series: RenderedSeriesWithNoteLink[];
 }
 
@@ -170,12 +180,33 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 				seriesForRollup.push({ ...rendered, seriesNotePath });
 			}
 
+			const bookCount = seriesForRollup.reduce((sum, s) => sum + s.bookCount, 0);
+			const finishedBookCount = seriesForRollup.reduce((sum, s) => sum + s.finishedBookCount, 0);
+			const libraryTotalSeconds = librarySeries.reduce(
+				(sum, series) => sum + getSeriesDurationSeconds(series),
+				0,
+			);
+			const libraryProgressSeconds = librarySeries.reduce((sum, series) => {
+				const totalSeconds = getSeriesDurationSeconds(series);
+				const totalProgressSeconds = (series.books ?? []).reduce((s, book) => {
+					const itemProgress = progressByLibraryItemId.get(book.id);
+					const bookDurationSeconds = normalizeDurationToSeconds(book.media?.duration);
+					return s + getBookProgressSeconds(itemProgress, bookDurationSeconds);
+				}, 0);
+				const capped =
+					totalSeconds > 0 ? Math.min(totalProgressSeconds, totalSeconds) : totalProgressSeconds;
+				return sum + capped;
+			}, 0);
 			const context: TemplateContext = {
 				libraryTitle,
 				generatedAt,
 				serverUrl: settings.serverUrl,
 				libraryCount: settings.libraryIds.length,
 				seriesCount: seriesForRollup.length,
+				bookCount,
+				finishedBookCount,
+				totalDurationHours: formatHours(libraryTotalSeconds),
+				progressDurationHours: formatHours(libraryProgressSeconds),
 				series: seriesForRollup,
 			};
 
@@ -187,12 +218,7 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 				await ensureFolderPath(app.vault, rollupDir);
 			}
 
-			const existingRollup = app.vault.getAbstractFileByPath(rollupPath);
-			if (existingRollup instanceof TFile) {
-				await app.vault.modify(existingRollup, renderedRollup);
-			} else {
-				await app.vault.create(rollupPath, renderedRollup);
-			}
+			await overwriteLibraryRollupFile(app.vault, rollupPath, renderedRollup);
 			libraryFilesWritten += 1;
 		} catch (err) {
 			const libraryTitle = libraryNameById.get(libraryId) ?? libraryId;
@@ -220,6 +246,56 @@ function vaultDirectoryForFile(filePath: string): string | null {
 	const normalized = normalizePath(filePath);
 	const slash = normalized.lastIndexOf("/");
 	return slash <= 0 ? null : normalized.slice(0, slash);
+}
+
+/** Obsidian resolves paths case-sensitively; disks are often case-insensitive, so lookups can miss existing notes. */
+function findMarkdownAtPathIgnoringCase(vault: Vault, normalizedPath: string): TFile | null {
+	const direct = vault.getAbstractFileByPath(normalizedPath);
+	if (direct instanceof TFile) {
+		return direct;
+	}
+	const lastSlash = normalizedPath.lastIndexOf("/");
+	const parentPath = lastSlash <= 0 ? "" : normalizedPath.slice(0, lastSlash);
+	const targetName = (lastSlash <= 0 ? normalizedPath : normalizedPath.slice(lastSlash + 1)).toLowerCase();
+	const parent = parentPath ? vault.getAbstractFileByPath(parentPath) : vault.getRoot();
+	if (!(parent instanceof TFolder)) {
+		return null;
+	}
+	for (const child of parent.children) {
+		if (child instanceof TFile && child.name.toLowerCase() === targetName) {
+			return child;
+		}
+	}
+	return null;
+}
+
+async function overwriteLibraryRollupFile(vault: Vault, rollupPath: string, content: string): Promise<void> {
+	const normalized = normalizePath(rollupPath);
+	const atPath = vault.getAbstractFileByPath(normalized);
+	if (atPath instanceof TFolder) {
+		throw new Error(`Cannot write library overview: "${normalized}" is a folder.`);
+	}
+	let file = findMarkdownAtPathIgnoringCase(vault, normalized);
+	if (file) {
+		await vault.modify(file, content);
+		return;
+	}
+	try {
+		await vault.create(normalized, content);
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (!/already exists/i.test(msg)) {
+			throw err;
+		}
+		const retryAbstract = vault.getAbstractFileByPath(normalized);
+		file =
+			findMarkdownAtPathIgnoringCase(vault, normalized) ??
+			(retryAbstract instanceof TFile ? retryAbstract : null);
+		if (!file) {
+			throw err;
+		}
+		await vault.modify(file, content);
+	}
 }
 
 /** Path segment matching the Audiobookshelf library name aside from forbidden path characters. */
@@ -333,11 +409,13 @@ function toRenderedSeries(
 			book.media?.progress?.isFinished === true ||
 			book.media?.userMediaProgress?.isFinished === true;
 		const hasStarted = hasBookStarted(book, itemProgress);
+		const imageUrl = buildBookImageUrl(normalizedServerUrl, book.id);
 		return {
 			id: book.id,
 			title: meta.title ?? "",
 			description: typeof meta.description === "string" ? meta.description.trim() : "",
-			coverUrl: buildBookCoverUrl(normalizedServerUrl, book.id),
+			imageUrl,
+			coverUrl: imageUrl,
 			authorName: meta.authorName ?? "",
 			publishedYear: meta.publishedYear ?? "",
 			sequence: meta.series?.sequence ?? "",
@@ -393,7 +471,7 @@ function getSeriesDescription(series: Series): string {
 	return "";
 }
 
-function buildBookCoverUrl(serverUrl: string, bookId: string): string {
+function buildBookImageUrl(serverUrl: string, bookId: string): string {
 	if (!serverUrl || !bookId) {
 		return "";
 	}
