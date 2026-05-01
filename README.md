@@ -16,7 +16,7 @@ Obsidian plugin that connects to an [Audiobookshelf](https://www.audiobookshelf.
    npm install
    npm run build
    ```
-2. Copy `manifest.json`, `main.js`, and `styles.css` into your vault at:
+2. Copy everything from the `dist/` folder (`main.js`, `manifest.json`, `styles.css`) into your vault at:
    ```
    <Vault>/.obsidian/plugins/audiobookshelf-collection/
    ```
@@ -42,7 +42,7 @@ Run **Generate series note** from the command palette, or click the book ribbon 
 
 ## Modifying the template
 
-The template lives at [src/templates/series-note.md](src/templates/series-note.md). Edit it and run `npm run build` to bundle the new version into `main.js`.
+The template lives at [src/templates/series-note.md](src/templates/series-note.md). Edit it and run `npm run build` to refresh `dist/main.js` (and copied assets).
 
 The renderer supports a small Handlebars-flavored syntax:
 
@@ -77,8 +77,8 @@ Output is plain text/markdown; no HTML escaping is applied. Missing values rende
 
 ## Development
 
-- `npm run dev` — watch-mode build.
-- `npm run build` — type-check + production bundle.
+- `npm run dev` — watch-mode build; writes to `dist/` and refreshes copied assets on each rebuild.
+- `npm run build` — type-check + production bundle into `dist/` (`main.js` plus copied `manifest.json` and `styles.css`).
 - `npm run lint` — run ESLint with the `obsidianmd` rules.
 
 Source layout:

@@ -1,6 +1,15 @@
 import esbuild from "esbuild";
 import process from "process";
-import { builtinModules } from 'node:module';
+import { builtinModules } from "node:module";
+import { copyFileSync, mkdirSync } from "node:fs";
+
+const distDir = "dist";
+
+function copyReleaseAssets() {
+	mkdirSync(distDir, { recursive: true });
+	copyFileSync("manifest.json", `${distDir}/manifest.json`);
+	copyFileSync("styles.css", `${distDir}/styles.css`);
+}
 
 const banner =
 `/*
@@ -17,6 +26,17 @@ const context = await esbuild.context({
 	},
 	entryPoints: ["src/main.ts"],
 	bundle: true,
+	plugins: [
+		{
+			name: "copy-release-assets",
+			setup(build) {
+				build.onEnd((result) => {
+					if (result.errors.length > 0) return;
+					copyReleaseAssets();
+				});
+			},
+		},
+	],
 	external: [
 		"obsidian",
 		"electron",
@@ -37,7 +57,7 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
-	outfile: "main.js",
+	outfile: `${distDir}/main.js`,
 	minify: prod,
 	loader: {
 		".md": "text",
