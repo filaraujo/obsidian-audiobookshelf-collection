@@ -8,6 +8,7 @@ import seriesNoteTemplate from "../templates/series-note.md";
 interface RenderedBook {
 	id: string;
 	title: string;
+	coverUrl: string;
 	authorName: string;
 	publishedYear: string;
 	sequence: string;
@@ -115,7 +116,9 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 			serverUrl: settings.serverUrl,
 			libraryCount: settings.libraryIds.length,
 			seriesCount: librarySeries.length,
-			series: librarySeries.map((series) => toRenderedSeries(series, progressByLibraryItemId)),
+			series: librarySeries.map((series) =>
+				toRenderedSeries(series, progressByLibraryItemId, settings.serverUrl),
+			),
 		};
 
 		const rendered = renderTemplate(template, context);
@@ -167,7 +170,9 @@ async function resolveTemplate(plugin: AudiobookshelfPlugin): Promise<string> {
 function toRenderedSeries(
 	series: Series,
 	progressByLibraryItemId: Map<string, UserMediaProgress>,
+	serverUrl: string,
 ): RenderedSeries {
+	const normalizedServerUrl = serverUrl.replace(/\/+$/, "");
 	const books: RenderedBook[] = (series.books ?? []).map((book) => {
 		const meta = book.media?.metadata ?? {};
 		const itemProgress = progressByLibraryItemId.get(book.id);
@@ -182,6 +187,7 @@ function toRenderedSeries(
 		return {
 			id: book.id,
 			title: meta.title ?? "",
+			coverUrl: buildBookCoverUrl(normalizedServerUrl, book.id),
 			authorName: meta.authorName ?? "",
 			publishedYear: meta.publishedYear ?? "",
 			sequence: meta.series?.sequence ?? "",
@@ -212,6 +218,13 @@ function toRenderedSeries(
 		progressDurationHours: formatHours(progressSeconds),
 		books,
 	};
+}
+
+function buildBookCoverUrl(serverUrl: string, bookId: string): string {
+	if (!serverUrl || !bookId) {
+		return "";
+	}
+	return `${serverUrl}/api/items/${encodeURIComponent(bookId)}/cover`;
 }
 
 function getBookProgressSeconds(
@@ -254,7 +267,7 @@ function normalizeProgressRatio(value: unknown): number {
 		return 0;
 	}
 
-	const parsed = Number(String(value).trim());
+	const parsed = parseNumericValue(value);
 	if (!Number.isFinite(parsed) || parsed <= 0) {
 		return 0;
 	}
@@ -287,13 +300,23 @@ function normalizeDurationToSeconds(value: unknown): number {
 		return 0;
 	}
 
-	const parsed = typeof value === "number" ? value : Number(String(value).trim());
+	const parsed = parseNumericValue(value);
 	if (!Number.isFinite(parsed) || parsed <= 0) {
 		return 0;
 	}
 
 	// Some API responses may provide milliseconds instead of seconds.
 	return parsed > 10_000_000 ? parsed / 1000 : parsed;
+}
+
+function parseNumericValue(value: unknown): number {
+	if (typeof value === "number") {
+		return value;
+	}
+	if (typeof value === "string") {
+		return Number(value.trim());
+	}
+	return Number.NaN;
 }
 
 function compareSequences(a: string, b: string): number {

@@ -67,6 +67,7 @@ The template context provided by the command is:
     progressDurationHours: string; // 1 decimal
     books: Array<{
       title: string;
+      coverUrl: string;          // `${serverUrl}/api/items/{bookId}/cover`
       authorName: string;
       publishedYear: string;
       sequence: string;          // numeric position when available
