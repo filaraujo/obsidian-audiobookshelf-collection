@@ -6,7 +6,7 @@ Obsidian plugin that connects to an [Audiobookshelf](https://www.audiobookshelf.
 
 - Configure server URL and API token in settings.
 - Multi-select which libraries to include.
-- One command (and ribbon icon) generates the note in the currently active folder.
+- One command (and ribbon icon) syncs series notes and library overviews into the folder you configure.
 - The note is rendered from a plain markdown template kept in the repo, so it's easy to modify.
 
 ## Setup
@@ -31,9 +31,9 @@ Open **Settings → Audiobookshelf Collection** and fill in:
 - **Library overview path** — vault-relative path under the folder below (supports `{{libraryName}}` and slashes; default is `{{libraryName}}/All Series`).
 - **Libraries** — click **Fetch libraries** to load them from the server, then toggle the ones you want.
 
-## Generating the note
+## Generating notes
 
-Run **Generate series note** from the command palette, or click the book ribbon icon. The plugin:
+Run **Sync library series notes** from the command palette, or click the book ribbon icon. The plugin:
 
 1. Calls `GET /api/libraries/{id}/series` for each selected library.
 2. Sorts series alphabetically.
@@ -87,6 +87,7 @@ Output is plain text/markdown; no HTML escaping is applied. Missing values rende
 - `npm run dev` — watch-mode build; writes to `dist/` and refreshes copied assets on each rebuild.
 - `npm run build` — type-check + production bundle into `dist/` (`main.js` plus copied `manifest.json` and `styles.css`).
 - `npm run lint` — run ESLint with the `obsidianmd` rules.
+- `npm test` — run Vitest on pure helpers (`src/**/*.test.ts`).
 
 Source layout:
 
@@ -100,7 +101,8 @@ src/
   template/render.ts            Mustache/handlebars-flavored renderer
   templates/library-note.md     Default library rollup template (bundled by esbuild)
   templates/series-note.md      Default individual series template (bundled by esbuild)
-  commands/generateSeriesNote.ts Command implementation
+  commands/syncLibrarySeriesNotes.ts Command orchestration
+  seriesNote/                      Types, vault output, rendering, templates, progress math
 ```
 
 ## Privacy

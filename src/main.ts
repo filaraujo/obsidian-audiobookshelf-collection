@@ -1,7 +1,7 @@
 import { Plugin } from "obsidian";
 import { AudiobookshelfSettings, DEFAULT_SETTINGS } from "./settings";
 import { AudiobookshelfSettingTab } from "./ui/settingsTab";
-import { generateSeriesNote } from "./commands/generateSeriesNote";
+import { syncLibrarySeriesNotes } from "./commands/syncLibrarySeriesNotes";
 
 export default class AudiobookshelfPlugin extends Plugin {
 	settings: AudiobookshelfSettings;
@@ -13,14 +13,14 @@ export default class AudiobookshelfPlugin extends Plugin {
 
 		this.addCommand({
 			id: "generate-series-note",
-			name: "Generate series note",
+			name: "Sync library series notes",
 			callback: () => {
-				void generateSeriesNote(this);
+				void syncLibrarySeriesNotes(this);
 			},
 		});
 
-		this.addRibbonIcon("library-big", "Generate series note", () => {
-			void generateSeriesNote(this);
+		this.addRibbonIcon("library-big", "Sync library series notes", () => {
+			void syncLibrarySeriesNotes(this);
 		});
 	}
 
