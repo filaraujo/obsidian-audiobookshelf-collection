@@ -1,7 +1,7 @@
 import { Notice, TFile, TFolder, normalizePath } from "obsidian";
 import type AudiobookshelfPlugin from "../main";
 import { AudiobookshelfApiError, AudiobookshelfClient } from "../api/client";
-import { Library, Series } from "../api/types";
+import { Library, Series, UserMediaProgress } from "../api/types";
 import { renderTemplate } from "../template/render";
 import seriesNoteTemplate from "../templates/series-note.md";
 
@@ -19,7 +19,9 @@ interface RenderedSeries {
 	id: string;
 	name: string;
 	bookCount: number;
+	finishedBookCount: number;
 	totalDurationHours: string;
+	progressDurationHours: string;
 	books: RenderedBook[];
 }
 
@@ -60,18 +62,18 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 	});
 
 	let perLibrary: Series[][];
-	let finishedBookIds: Set<string>;
+	let progressByLibraryItemId: Map<string, UserMediaProgress>;
 	let libraries: Library[];
 	try {
-		[perLibrary, libraries, finishedBookIds] = await Promise.all([
+		[perLibrary, libraries, progressByLibraryItemId] = await Promise.all([
 			Promise.all(settings.libraryIds.map((id) => client.getSeries(id))),
 			client.getLibraries(),
 			client.getMyMediaProgress().then(
 				(progress) =>
-					new Set(
+					new Map(
 						progress
-							.filter((entry) => entry.isFinished === true)
-							.map((entry) => entry.libraryItemId),
+							.filter((entry) => typeof entry.libraryItemId === "string" && entry.libraryItemId.length > 0)
+							.map((entry) => [entry.libraryItemId, entry] as const),
 					),
 			),
 		]);
@@ -113,7 +115,7 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 			serverUrl: settings.serverUrl,
 			libraryCount: settings.libraryIds.length,
 			seriesCount: librarySeries.length,
-			series: librarySeries.map((series) => toRenderedSeries(series, finishedBookIds)),
+			series: librarySeries.map((series) => toRenderedSeries(series, progressByLibraryItemId)),
 		};
 
 		const rendered = renderTemplate(template, context);
@@ -162,10 +164,21 @@ async function resolveTemplate(plugin: AudiobookshelfPlugin): Promise<string> {
 	return await plugin.app.vault.cachedRead(file);
 }
 
-function toRenderedSeries(series: Series, finishedBookIds: Set<string>): RenderedSeries {
+function toRenderedSeries(
+	series: Series,
+	progressByLibraryItemId: Map<string, UserMediaProgress>,
+): RenderedSeries {
 	const books: RenderedBook[] = (series.books ?? []).map((book) => {
 		const meta = book.media?.metadata ?? {};
-		const isFinished = finishedBookIds.has(book.id);
+		const itemProgress = progressByLibraryItemId.get(book.id);
+		const isFinished =
+			itemProgress?.isFinished === true ||
+			book.isFinished === true ||
+			book.progress?.isFinished === true ||
+			book.mediaProgress?.isFinished === true ||
+			book.userMediaProgress?.isFinished === true ||
+			book.media?.progress?.isFinished === true ||
+			book.media?.userMediaProgress?.isFinished === true;
 		return {
 			id: book.id,
 			title: meta.title ?? "",
@@ -179,16 +192,81 @@ function toRenderedSeries(series: Series, finishedBookIds: Set<string>): Rendere
 
 	books.sort((a, b) => compareSequences(a.sequence, b.sequence));
 
+	const finishedBookCount = books.filter((book) => book.isFinished).length;
 	const totalSeconds = getSeriesDurationSeconds(series);
-	const totalDurationHours = (totalSeconds / 3600).toFixed(1);
+	const totalProgressSeconds = (series.books ?? []).reduce((sum, book) => {
+		const itemProgress = progressByLibraryItemId.get(book.id);
+		const bookDurationSeconds = normalizeDurationToSeconds(book.media?.duration);
+		const progressSeconds = getBookProgressSeconds(itemProgress, bookDurationSeconds);
+		return sum + progressSeconds;
+	}, 0);
+	const progressSeconds =
+		totalSeconds > 0 ? Math.min(totalProgressSeconds, totalSeconds) : totalProgressSeconds;
 
 	return {
 		id: series.id,
 		name: series.name,
 		bookCount: books.length,
-		totalDurationHours,
+		finishedBookCount,
+		totalDurationHours: formatHours(totalSeconds),
+		progressDurationHours: formatHours(progressSeconds),
 		books,
 	};
+}
+
+function getBookProgressSeconds(
+	progressEntry: UserMediaProgress | undefined,
+	bookDurationSeconds: number,
+): number {
+	if (!progressEntry) {
+		return 0;
+	}
+
+	if (progressEntry.isFinished === true) {
+		if (bookDurationSeconds > 0) {
+			return bookDurationSeconds;
+		}
+	}
+
+	const currentTimeSeconds = normalizeDurationToSeconds(progressEntry.currentTime);
+	if (currentTimeSeconds > 0) {
+		if (bookDurationSeconds > 0) {
+			return Math.min(currentTimeSeconds, bookDurationSeconds);
+		}
+		return currentTimeSeconds;
+	}
+
+	const durationSeconds = normalizeDurationToSeconds(progressEntry.duration);
+	const progressRatio = normalizeProgressRatio(progressEntry.progress);
+	if (durationSeconds > 0 && progressRatio > 0) {
+		const estimatedSeconds = durationSeconds * progressRatio;
+		if (bookDurationSeconds > 0) {
+			return Math.min(estimatedSeconds, bookDurationSeconds);
+		}
+		return estimatedSeconds;
+	}
+
+	return 0;
+}
+
+function normalizeProgressRatio(value: unknown): number {
+	if (value == null) {
+		return 0;
+	}
+
+	const parsed = Number(String(value).trim());
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		return 0;
+	}
+
+	if (parsed > 1 && parsed <= 100) {
+		return parsed / 100;
+	}
+	return Math.min(parsed, 1);
+}
+
+function formatHours(seconds: number): string {
+	return (Math.max(0, seconds) / 3600).toFixed(1);
 }
 
 function getSeriesDurationSeconds(series: Series): number {

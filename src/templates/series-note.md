@@ -2,16 +2,16 @@
 generatedAt: "{{generatedAt}}"
 serverUrl: "{{serverUrl}}"
 seriesCount: {{seriesCount}}
-libraryCount: {{libraryCount}}
 ---
 # {{libraryTitle}} series
+{{seriesCount}} series
 
 {{#each series}}
 
 > [!book-open]+ {{name}}
 > 
-> Books: {{bookCount}}
-> Total duration: {{totalDurationHours}} h
+> Books: {{finishedBookCount}} / {{bookCount}}
+> Duration: {{progressDurationHours}} h / {{totalDurationHours}} h
 > ---
 > {{#each books}}
 > :{{statusIcon}}: **{{title}}** by {{authorName}}

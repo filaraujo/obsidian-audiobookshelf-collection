@@ -62,7 +62,9 @@ The template context provided by the command is:
     id: string;
     name: string;
     bookCount: number;
+    finishedBookCount: number;
     totalDurationHours: string;  // 1 decimal
+    progressDurationHours: string; // 1 decimal
     books: Array<{
       title: string;
       authorName: string;
