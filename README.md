@@ -28,7 +28,7 @@ Open **Settings → Audiobookshelf Collection** and fill in:
 
 - **Server URL** — the base URL of your Audiobookshelf server (no trailing slash), e.g. `https://abs.example.com`.
 - **API token** — copy this from your Audiobookshelf user profile.
-- **Output file name** — file written into the active folder when running the command.
+- **Output file name** — file name template for generated notes (supports `{{libraryName}}`; default is `{{libraryName}} Series`).
 - **Libraries** — click **Fetch libraries** to load them from the server, then toggle the ones you want.
 
 ## Generating the note

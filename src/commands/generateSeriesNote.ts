@@ -1,7 +1,7 @@
 import { Notice, TFile, TFolder, normalizePath } from "obsidian";
 import type AudiobookshelfPlugin from "../main";
 import { AudiobookshelfApiError, AudiobookshelfClient } from "../api/client";
-import { Series } from "../api/types";
+import { Library, Series } from "../api/types";
 import { renderTemplate } from "../template/render";
 import seriesNoteTemplate from "../templates/series-note.md";
 
@@ -24,6 +24,7 @@ interface RenderedSeries {
 }
 
 interface TemplateContext {
+	libraryTitle: string;
 	generatedAt: string;
 	serverUrl: string;
 	libraryCount: number;
@@ -60,35 +61,31 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 
 	let perLibrary: Series[][];
 	let finishedBookIds: Set<string>;
+	let libraries: Library[];
 	try {
-		perLibrary = await Promise.all(
-			settings.libraryIds.map((id) => client.getSeries(id)),
-		);
-		const progress = await client.getMyMediaProgress();
-		finishedBookIds = new Set(
-			progress.filter((entry) => entry.isFinished === true).map((entry) => entry.libraryItemId),
-		);
+		[perLibrary, libraries, finishedBookIds] = await Promise.all([
+			Promise.all(settings.libraryIds.map((id) => client.getSeries(id))),
+			client.getLibraries(),
+			client.getMyMediaProgress().then(
+				(progress) =>
+					new Set(
+						progress
+							.filter((entry) => entry.isFinished === true)
+							.map((entry) => entry.libraryItemId),
+					),
+			),
+		]);
 	} catch (err) {
 		const msg = err instanceof AudiobookshelfApiError ? err.message : String(err);
 		new Notice(`Audiobookshelf: failed to fetch series — ${msg}`);
 		return;
 	}
 
-	const allSeries: Series[] = perLibrary.flat();
-	allSeries.sort((a, b) => a.name.localeCompare(b.name));
+	const libraryNameById = new Map(libraries.map((library) => [library.id, library.name]));
 
-	const context: TemplateContext = {
-		generatedAt: new Date().toLocaleString(),
-		serverUrl: settings.serverUrl,
-		libraryCount: settings.libraryIds.length,
-		seriesCount: allSeries.length,
-		series: allSeries.map((series) => toRenderedSeries(series, finishedBookIds)),
-	};
-
-	let rendered: string;
+	let template: string;
 	try {
-		const template = await resolveTemplate(plugin);
-		rendered = renderTemplate(template, context);
+		template = await resolveTemplate(plugin);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
 		new Notice(`Audiobookshelf: template render failed — ${msg}`);
@@ -103,20 +100,44 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 			return;
 		}
 	}
-	const filePath = normalizePath(
-		folderPath ? `${folderPath}/${settings.outputFileName}` : settings.outputFileName,
-	);
+	let filesWritten = 0;
+	let totalSeriesWritten = 0;
+	for (const [index, libraryId] of settings.libraryIds.entries()) {
+		const librarySeries = [...(perLibrary[index] ?? [])];
+		librarySeries.sort((a, b) => a.name.localeCompare(b.name));
+		const libraryTitle = libraryNameById.get(libraryId) ?? libraryId;
 
-	const existing = app.vault.getAbstractFileByPath(filePath);
-	let target: TFile;
-	if (existing instanceof TFile) {
-		await app.vault.modify(existing, rendered);
-		target = existing;
-	} else {
-		target = await app.vault.create(filePath, rendered);
+		const context: TemplateContext = {
+			libraryTitle,
+			generatedAt: new Date().toLocaleString(),
+			serverUrl: settings.serverUrl,
+			libraryCount: settings.libraryIds.length,
+			seriesCount: librarySeries.length,
+			series: librarySeries.map((series) => toRenderedSeries(series, finishedBookIds)),
+		};
+
+		const rendered = renderTemplate(template, context);
+		const outputFileName = buildLibraryFileName(settings.outputFileName, libraryTitle);
+		const filePath = normalizePath(folderPath ? `${folderPath}/${outputFileName}` : outputFileName);
+
+		const existing = app.vault.getAbstractFileByPath(filePath);
+		if (existing instanceof TFile) {
+			await app.vault.modify(existing, rendered);
+		} else {
+			await app.vault.create(filePath, rendered);
+		}
+		filesWritten += 1;
+		totalSeriesWritten += librarySeries.length;
 	}
 
-	new Notice(`Audiobookshelf: wrote ${allSeries.length} series to ${target.path}`);
+	new Notice(`Audiobookshelf: wrote ${totalSeriesWritten} series across ${filesWritten} files.`);
+}
+
+function buildLibraryFileName(baseFileName: string, libraryTitle: string): string {
+	const template = baseFileName.trim() || "{{libraryName}} Series";
+	const safeLibraryName = libraryTitle.replace(/[\\/:"*?<>|]/g, "-").trim() || "Library";
+	const resolved = template.split("{{libraryName}}").join(safeLibraryName).trim();
+	return resolved.toLowerCase().endsWith(".md") ? resolved : `${resolved}.md`;
 }
 
 function normalizeFolderPath(folderLocation: string): string {
@@ -158,7 +179,7 @@ function toRenderedSeries(series: Series, finishedBookIds: Set<string>): Rendere
 
 	books.sort((a, b) => compareSequences(a.sequence, b.sequence));
 
-	const totalSeconds = typeof series.totalDuration === "number" ? series.totalDuration : 0;
+	const totalSeconds = getSeriesDurationSeconds(series);
 	const totalDurationHours = (totalSeconds / 3600).toFixed(1);
 
 	return {
@@ -168,6 +189,33 @@ function toRenderedSeries(series: Series, finishedBookIds: Set<string>): Rendere
 		totalDurationHours,
 		books,
 	};
+}
+
+function getSeriesDurationSeconds(series: Series): number {
+	const directDuration = normalizeDurationToSeconds(series.totalDuration);
+	if (directDuration > 0) {
+		return directDuration;
+	}
+
+	const summedBookDurations = (series.books ?? []).reduce((sum, book) => {
+		return sum + normalizeDurationToSeconds(book.media?.duration);
+	}, 0);
+
+	return summedBookDurations;
+}
+
+function normalizeDurationToSeconds(value: unknown): number {
+	if (value == null) {
+		return 0;
+	}
+
+	const parsed = typeof value === "number" ? value : Number(String(value).trim());
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		return 0;
+	}
+
+	// Some API responses may provide milliseconds instead of seconds.
+	return parsed > 10_000_000 ? parsed / 1000 : parsed;
 }
 
 function compareSequences(a: string, b: string): number {

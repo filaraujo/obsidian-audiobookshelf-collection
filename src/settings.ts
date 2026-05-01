@@ -9,7 +9,7 @@ export interface AudiobookshelfSettings {
 	folderLocation: string;
 	/** Vault-relative template file path. Empty means use the built-in template. */
 	templateFilePath: string;
-	/** File name (with .md extension) of the generated note. */
+	/** File name template for generated notes. Supports {{libraryName}}. */
 	outputFileName: string;
 }
 
@@ -19,5 +19,5 @@ export const DEFAULT_SETTINGS: AudiobookshelfSettings = {
 	libraryIds: [],
 	folderLocation: "",
 	templateFilePath: "",
-	outputFileName: "audiobookshelf-series.md",
+	outputFileName: "{{libraryName}} Series",
 };

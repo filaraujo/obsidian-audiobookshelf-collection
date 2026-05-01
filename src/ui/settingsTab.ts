@@ -154,13 +154,13 @@ export class AudiobookshelfSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Output file name")
-			.setDesc("File name for the generated note.")
+			.setDesc("File name template for generated notes. Use {{libraryName}} to include the library name.")
 			.addText((text) =>
 				text
-					.setPlaceholder("Series.md")
+					.setPlaceholder("{{libraryName}} Series")
 					.setValue(this.plugin.settings.outputFileName)
 					.onChange(async (value) => {
-						this.plugin.settings.outputFileName = value.trim() || "audiobookshelf-series.md";
+						this.plugin.settings.outputFileName = value.trim() || "{{libraryName}} Series";
 						await this.plugin.saveSettings();
 					}),
 			);

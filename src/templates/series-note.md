@@ -1,6 +1,10 @@
-# Audiobookshelf series
-
-Generated {{generatedAt}} from {{serverUrl}} ({{seriesCount}} series across {{libraryCount}} libraries).
+---
+generatedAt: "{{generatedAt}}"
+serverUrl: "{{serverUrl}}"
+seriesCount: {{seriesCount}}
+libraryCount: {{libraryCount}}
+---
+# {{libraryTitle}} series
 
 {{#each series}}
 

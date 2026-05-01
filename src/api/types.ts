@@ -28,6 +28,7 @@ export interface SeriesBook {
 		isFinished?: boolean;
 	};
 	media?: {
+		duration?: number | string;
 		metadata?: SeriesBookMetadata;
 		progress?: {
 			isFinished?: boolean;
@@ -56,7 +57,7 @@ export interface Series {
 	id: string;
 	name: string;
 	books: SeriesBook[];
-	totalDuration?: number;
+	totalDuration?: number | string;
 	addedAt?: number;
 }
 
