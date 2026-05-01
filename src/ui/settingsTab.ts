@@ -1,7 +1,41 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { AbstractInputSuggest, App, Notice, PluginSettingTab, Setting, TFolder, normalizePath } from "obsidian";
 import type AudiobookshelfPlugin from "../main";
 import { AudiobookshelfClient, AudiobookshelfApiError } from "../api/client";
 import { Library } from "../api/types";
+
+class FolderSuggest extends AbstractInputSuggest<string> {
+	private readonly folders: string[];
+	private readonly inputElement: HTMLInputElement;
+
+	constructor(app: App, inputEl: HTMLInputElement) {
+		super(app, inputEl);
+		this.inputElement = inputEl;
+		const folderPaths = app.vault
+			.getAllLoadedFiles()
+			.filter((file): file is TFolder => file instanceof TFolder)
+			.map((folder) => folder.path)
+			.sort((a, b) => a.localeCompare(b));
+		this.folders = ["/", ...folderPaths];
+	}
+
+	getSuggestions(inputStr: string): string[] {
+		const input = inputStr.trim().toLowerCase();
+		if (!input) {
+			return this.folders;
+		}
+		return this.folders.filter((folder) => folder.toLowerCase().includes(input));
+	}
+
+	renderSuggestion(folder: string, el: HTMLElement): void {
+		el.createEl("div", { text: folder });
+	}
+
+	selectSuggestion(folder: string): void {
+		this.inputElement.value = folder;
+		this.inputElement.dispatchEvent(new Event("input"));
+		this.close();
+	}
+}
 
 export class AudiobookshelfSettingTab extends PluginSettingTab {
 	plugin: AudiobookshelfPlugin;
@@ -46,8 +80,25 @@ export class AudiobookshelfSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
+			.setName("Folder location")
+			.setDesc("Choose the folder where the note is created.")
+			.addSearch((search) => {
+				search
+					.setPlaceholder("Example: Reading")
+					.setValue(this.plugin.settings.folderLocation || "/")
+					.onChange(async (value) => {
+						const normalizedValue = value.trim();
+						this.plugin.settings.folderLocation =
+							normalizedValue === "/" ? "" : normalizePath(normalizedValue.replace(/^\/+/, ""));
+						await this.plugin.saveSettings();
+					});
+
+				new FolderSuggest(this.app, search.inputEl);
+			});
+
+		new Setting(containerEl)
 			.setName("Output file name")
-			.setDesc("File created in the active folder when generating the note.")
+			.setDesc("File name for the generated note.")
 			.addText((text) =>
 				text
 					.setPlaceholder("Series.md")

@@ -86,7 +86,14 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 		return;
 	}
 
-	const folderPath = resolveActiveFolderPath(plugin);
+	const folderPath = normalizeFolderPath(settings.folderLocation);
+	if (folderPath) {
+		const folder = app.vault.getAbstractFileByPath(folderPath);
+		if (!(folder instanceof TFolder)) {
+			new Notice(`Audiobookshelf: folder "${folderPath}" does not exist.`);
+			return;
+		}
+	}
 	const filePath = normalizePath(
 		folderPath ? `${folderPath}/${settings.outputFileName}` : settings.outputFileName,
 	);
@@ -103,13 +110,12 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 	new Notice(`Audiobookshelf: wrote ${allSeries.length} series to ${target.path}`);
 }
 
-function resolveActiveFolderPath(plugin: AudiobookshelfPlugin): string {
-	const active = plugin.app.workspace.getActiveFile();
-	const parent = active?.parent;
-	if (parent instanceof TFolder && parent.path && parent.path !== "/") {
-		return parent.path;
+function normalizeFolderPath(folderLocation: string): string {
+	const value = folderLocation.trim();
+	if (!value || value === "/") {
+		return "";
 	}
-	return "";
+	return normalizePath(value.replace(/^\/+/, ""));
 }
 
 function toRenderedSeries(series: Series): RenderedSeries {

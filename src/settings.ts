@@ -5,7 +5,9 @@ export interface AudiobookshelfSettings {
 	apiToken: string;
 	/** IDs of the libraries the user wants to include. */
 	libraryIds: string[];
-	/** File name (with .md extension) of the generated note, written into the active folder. */
+	/** Vault-relative folder path where the note should be written. Empty means vault root. */
+	folderLocation: string;
+	/** File name (with .md extension) of the generated note. */
 	outputFileName: string;
 }
 
@@ -13,5 +15,6 @@ export const DEFAULT_SETTINGS: AudiobookshelfSettings = {
 	serverUrl: "",
 	apiToken: "",
 	libraryIds: [],
+	folderLocation: "",
 	outputFileName: "audiobookshelf-series.md",
 };
