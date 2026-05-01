@@ -1,36 +1,17 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
-import MyPlugin from "./main";
-
-export interface MyPluginSettings {
-	mySetting: string;
+export interface AudiobookshelfSettings {
+	/** Base URL of the Audiobookshelf server (no trailing slash), e.g. https://abs.example.com */
+	serverUrl: string;
+	/** Bearer token from the Audiobookshelf user profile. */
+	apiToken: string;
+	/** IDs of the libraries the user wants to include. */
+	libraryIds: string[];
+	/** File name (with .md extension) of the generated note, written into the active folder. */
+	outputFileName: string;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
-
-export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
-}
+export const DEFAULT_SETTINGS: AudiobookshelfSettings = {
+	serverUrl: "",
+	apiToken: "",
+	libraryIds: [],
+	outputFileName: "audiobookshelf-series.md",
+};
