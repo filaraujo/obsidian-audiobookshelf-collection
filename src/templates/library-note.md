@@ -13,7 +13,7 @@ serverUrl: "{{serverUrl}}"
 > Duration: {{progressDurationHours}} h / {{totalDurationHours}} h
 >
 > {{#each books}}
-> :{{statusIcon}}: **{{title}}** by {{authorName}}
+> :{{statusIcon}}: **{{title}}** by {{authorName}} · {{statusLabel}}
 > {{/each}}
 
 {{/each}}

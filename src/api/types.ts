@@ -21,21 +21,36 @@ export interface SeriesBook {
 	isFinished?: boolean;
 	progress?: {
 		isFinished?: boolean;
+		progress?: number;
+		currentTime?: number;
+		duration?: number;
 	};
 	mediaProgress?: {
 		isFinished?: boolean;
+		progress?: number;
+		currentTime?: number;
+		duration?: number;
 	};
 	userMediaProgress?: {
 		isFinished?: boolean;
+		progress?: number;
+		currentTime?: number;
+		duration?: number;
 	};
 	media?: {
 		duration?: number | string;
 		metadata?: SeriesBookMetadata;
 		progress?: {
 			isFinished?: boolean;
+			progress?: number;
+			currentTime?: number;
+			duration?: number;
 		};
 		userMediaProgress?: {
 			isFinished?: boolean;
+			progress?: number;
+			currentTime?: number;
+			duration?: number;
 		};
 	};
 }

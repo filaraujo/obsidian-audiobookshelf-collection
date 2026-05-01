@@ -16,6 +16,7 @@ interface RenderedBook {
 	sequence: string;
 	isFinished: boolean;
 	statusIcon: string;
+	statusLabel: string;
 }
 
 interface RenderedSeries {
@@ -331,6 +332,7 @@ function toRenderedSeries(
 			book.userMediaProgress?.isFinished === true ||
 			book.media?.progress?.isFinished === true ||
 			book.media?.userMediaProgress?.isFinished === true;
+		const hasStarted = hasBookStarted(book, itemProgress);
 		return {
 			id: book.id,
 			title: meta.title ?? "",
@@ -340,7 +342,16 @@ function toRenderedSeries(
 			publishedYear: meta.publishedYear ?? "",
 			sequence: meta.series?.sequence ?? "",
 			isFinished,
-			statusIcon: isFinished ? "luc_bookmark_plus" : "luc_bookmark",
+			statusIcon: isFinished
+				? "luc_bookmark_plus"
+				: hasStarted
+					? "luc_book_open"
+					: "luc_bookmark",
+			statusLabel: isFinished
+				? "Finished"
+				: hasStarted
+					? "In progress"
+					: "Not started",
 		};
 	});
 
@@ -422,6 +433,40 @@ function getBookProgressSeconds(
 	}
 
 	return 0;
+}
+
+function hasBookStarted(book: Series["books"][number], progressEntry: UserMediaProgress | undefined): boolean {
+	const progressSignals = [
+		progressEntry?.currentTime,
+		progressEntry?.progress,
+		progressEntry?.duration,
+		book.progress?.currentTime,
+		book.mediaProgress?.currentTime,
+		book.userMediaProgress?.currentTime,
+		book.media?.progress?.currentTime,
+		book.media?.userMediaProgress?.currentTime,
+	];
+	for (const signal of progressSignals) {
+		if (parseNumericValue(signal) > 0) {
+			return true;
+		}
+	}
+
+	const ratioSignals = [
+		progressEntry?.progress,
+		book.progress?.progress,
+		book.mediaProgress?.progress,
+		book.userMediaProgress?.progress,
+		book.media?.progress?.progress,
+		book.media?.userMediaProgress?.progress,
+	];
+	for (const ratio of ratioSignals) {
+		if (normalizeProgressRatio(ratio) > 0) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 function normalizeProgressRatio(value: unknown): number {

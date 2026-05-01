@@ -12,14 +12,14 @@ Obsidian plugin that connects to an [Audiobookshelf](https://www.audiobookshelf.
 ## Setup
 
 1. Install build dependencies and build the plugin:
-   ```bash
+  ```bash
    npm install
    npm run build
-   ```
+  ```
 2. Copy everything from the `dist/` folder (`main.js`, `manifest.json`, `styles.css`) into your vault at:
-   ```
+  ```
    <Vault>/.obsidian/plugins/audiobookshelf-collection/
-   ```
+  ```
 3. In Obsidian, enable **Audiobookshelf Collection** under **Settings → Community plugins**.
 
 ## Configuration
@@ -72,7 +72,8 @@ The template context provided by the command is:
       publishedYear: string;
       sequence: string;          // numeric position when available
       isFinished: boolean;       // true when user finished the book
-      statusIcon: string;        // "bookmark-check" or "bookmark"
+      statusIcon: string;        // Lucide shorthand for `:icon:` — "luc_bookmark_plus", "luc_book_open", or "luc_bookmark"
+      statusLabel: string;       // "Finished", "In progress", or "Not started"
     }>;
   }>;
 }

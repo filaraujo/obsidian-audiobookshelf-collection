@@ -2,6 +2,7 @@
 createdAt: "{{generatedAt}}"
 serverUrl: "{{serverUrl}}"
 ---
+
 # {{series.name}}
 
 {{#if series.description}}
@@ -16,13 +17,13 @@ Duration: {{series.progressDurationHours}} h / {{series.totalDurationHours}} h
 
 {{#each series.books}}
 
-> [!{{statusIcon}}]+ {{title}}
->
-> Status: :{{statusIcon}}:
-> Author: {{authorName}}
->
-> {{#if description}}
-> {{description}}
-> {{/if}}
->
+## {{title}}
+
+Progress: :{{statusIcon}}: {{statusLabel}}
+Author: {{authorName}}
+
+{{#if description}}
+{{description}}
+{{/if}}
+
 {{/each}}
