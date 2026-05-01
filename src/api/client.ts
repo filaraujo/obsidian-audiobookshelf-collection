@@ -1,5 +1,12 @@
 import { requestUrl, RequestUrlParam } from "obsidian";
-import { LibrariesResponse, Library, Series, SeriesResponse } from "./types";
+import {
+	LibrariesResponse,
+	MeResponse,
+	Library,
+	Series,
+	SeriesResponse,
+	UserMediaProgress,
+} from "./types";
 
 export class AudiobookshelfApiError extends Error {
 	constructor(message: string, public readonly status?: number) {
@@ -45,6 +52,11 @@ export class AudiobookshelfClient {
 			if (page > 1000) break;
 		}
 		return all;
+	}
+
+	async getMyMediaProgress(): Promise<UserMediaProgress[]> {
+		const data = await this.request<MeResponse>("/api/me");
+		return data.mediaProgress ?? [];
 	}
 
 	private async request<T>(path: string): Promise<T> {

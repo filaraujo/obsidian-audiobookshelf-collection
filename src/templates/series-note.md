@@ -4,14 +4,13 @@ Generated {{generatedAt}} from {{serverUrl}} ({{seriesCount}} series across {{li
 
 {{#each series}}
 
-## {{name}}
-
-- Books: {{bookCount}}
-- Total duration: {{totalDurationHours}} h
-
-{{#each books}}
-
-- {{sequence}} — **{{title}}** by {{authorName}}{{#if publishedYear}} ({{publishedYear}}){{/if}}
-{{/each}}
+> [!book-open]+ {{name}}
+> 
+> Books: {{bookCount}}
+> Total duration: {{totalDurationHours}} h
+> ---
+> {{#each books}}
+> :{{statusIcon}}: **{{title}}** by {{authorName}}
+> {{/each}}
 
 {{/each}}

@@ -68,6 +68,8 @@ The template context provided by the command is:
       authorName: string;
       publishedYear: string;
       sequence: string;          // numeric position when available
+      isFinished: boolean;       // true when user finished the book
+      statusIcon: string;        // "bookmark-check" or "bookmark"
     }>;
   }>;
 }

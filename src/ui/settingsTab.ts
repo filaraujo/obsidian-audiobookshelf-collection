@@ -1,4 +1,13 @@
-import { AbstractInputSuggest, App, Notice, PluginSettingTab, Setting, TFolder, normalizePath } from "obsidian";
+import {
+	AbstractInputSuggest,
+	App,
+	Notice,
+	PluginSettingTab,
+	Setting,
+	TFile,
+	TFolder,
+	normalizePath,
+} from "obsidian";
 import type AudiobookshelfPlugin from "../main";
 import { AudiobookshelfClient, AudiobookshelfApiError } from "../api/client";
 import { Library } from "../api/types";
@@ -32,6 +41,38 @@ class FolderSuggest extends AbstractInputSuggest<string> {
 
 	selectSuggestion(folder: string): void {
 		this.inputElement.value = folder;
+		this.inputElement.dispatchEvent(new Event("input"));
+		this.close();
+	}
+}
+
+class TemplateFileSuggest extends AbstractInputSuggest<string> {
+	private readonly files: string[];
+	private readonly inputElement: HTMLInputElement;
+
+	constructor(app: App, inputEl: HTMLInputElement) {
+		super(app, inputEl);
+		this.inputElement = inputEl;
+		this.files = app.vault
+			.getMarkdownFiles()
+			.map((file: TFile) => file.path)
+			.sort((a, b) => a.localeCompare(b));
+	}
+
+	getSuggestions(inputStr: string): string[] {
+		const input = inputStr.trim().toLowerCase();
+		if (!input) {
+			return this.files;
+		}
+		return this.files.filter((file) => file.toLowerCase().includes(input));
+	}
+
+	renderSuggestion(filePath: string, el: HTMLElement): void {
+		el.createEl("div", { text: filePath });
+	}
+
+	selectSuggestion(filePath: string): void {
+		this.inputElement.value = filePath;
 		this.inputElement.dispatchEvent(new Event("input"));
 		this.close();
 	}
@@ -94,6 +135,21 @@ export class AudiobookshelfSettingTab extends PluginSettingTab {
 					});
 
 				new FolderSuggest(this.app, search.inputEl);
+			});
+
+		new Setting(containerEl)
+			.setName("Template file")
+			.setDesc("Choose a markdown template file from your vault. Leave empty to use the built-in template.")
+			.addSearch((search) => {
+				search
+					.setPlaceholder("Example: Templates/audiobookshelf-series-template.md")
+					.setValue(this.plugin.settings.templateFilePath)
+					.onChange(async (value) => {
+						this.plugin.settings.templateFilePath = normalizePath(value.trim().replace(/^\/+/, ""));
+						await this.plugin.saveSettings();
+					});
+
+				new TemplateFileSuggest(this.app, search.inputEl);
 			});
 
 		new Setting(containerEl)

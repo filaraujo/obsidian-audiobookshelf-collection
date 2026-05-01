@@ -17,9 +17,39 @@ export interface SeriesBookMetadata {
 
 export interface SeriesBook {
 	id: string;
+	isFinished?: boolean;
+	progress?: {
+		isFinished?: boolean;
+	};
+	mediaProgress?: {
+		isFinished?: boolean;
+	};
+	userMediaProgress?: {
+		isFinished?: boolean;
+	};
 	media?: {
 		metadata?: SeriesBookMetadata;
+		progress?: {
+			isFinished?: boolean;
+		};
+		userMediaProgress?: {
+			isFinished?: boolean;
+		};
 	};
+}
+
+export interface UserMediaProgress {
+	id: string;
+	libraryItemId: string;
+	isFinished?: boolean;
+	progress?: number;
+	currentTime?: number;
+	duration?: number;
+}
+
+export interface MeResponse {
+	id: string;
+	mediaProgress?: UserMediaProgress[];
 }
 
 export interface Series {

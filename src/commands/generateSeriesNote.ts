@@ -6,10 +6,13 @@ import { renderTemplate } from "../template/render";
 import seriesNoteTemplate from "../templates/series-note.md";
 
 interface RenderedBook {
+	id: string;
 	title: string;
 	authorName: string;
 	publishedYear: string;
 	sequence: string;
+	isFinished: boolean;
+	statusIcon: string;
 }
 
 interface RenderedSeries {
@@ -56,9 +59,14 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 	});
 
 	let perLibrary: Series[][];
+	let finishedBookIds: Set<string>;
 	try {
 		perLibrary = await Promise.all(
 			settings.libraryIds.map((id) => client.getSeries(id)),
+		);
+		const progress = await client.getMyMediaProgress();
+		finishedBookIds = new Set(
+			progress.filter((entry) => entry.isFinished === true).map((entry) => entry.libraryItemId),
 		);
 	} catch (err) {
 		const msg = err instanceof AudiobookshelfApiError ? err.message : String(err);
@@ -74,12 +82,13 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 		serverUrl: settings.serverUrl,
 		libraryCount: settings.libraryIds.length,
 		seriesCount: allSeries.length,
-		series: allSeries.map(toRenderedSeries),
+		series: allSeries.map((series) => toRenderedSeries(series, finishedBookIds)),
 	};
 
 	let rendered: string;
 	try {
-		rendered = renderTemplate(seriesNoteTemplate, context);
+		const template = await resolveTemplate(plugin);
+		rendered = renderTemplate(template, context);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
 		new Notice(`Audiobookshelf: template render failed — ${msg}`);
@@ -118,14 +127,32 @@ function normalizeFolderPath(folderLocation: string): string {
 	return normalizePath(value.replace(/^\/+/, ""));
 }
 
-function toRenderedSeries(series: Series): RenderedSeries {
+async function resolveTemplate(plugin: AudiobookshelfPlugin): Promise<string> {
+	const templatePath = plugin.settings.templateFilePath?.trim() ?? "";
+	if (!templatePath) {
+		return seriesNoteTemplate;
+	}
+
+	const file = plugin.app.vault.getAbstractFileByPath(templatePath);
+	if (!(file instanceof TFile)) {
+		return seriesNoteTemplate;
+	}
+
+	return await plugin.app.vault.cachedRead(file);
+}
+
+function toRenderedSeries(series: Series, finishedBookIds: Set<string>): RenderedSeries {
 	const books: RenderedBook[] = (series.books ?? []).map((book) => {
 		const meta = book.media?.metadata ?? {};
+		const isFinished = finishedBookIds.has(book.id);
 		return {
+			id: book.id,
 			title: meta.title ?? "",
 			authorName: meta.authorName ?? "",
 			publishedYear: meta.publishedYear ?? "",
 			sequence: meta.series?.sequence ?? "",
+			isFinished,
+			statusIcon: isFinished ? "luc_bookmark_plus" : "luc_bookmark",
 		};
 	});
 
