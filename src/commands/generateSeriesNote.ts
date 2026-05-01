@@ -1,13 +1,15 @@
-import { Notice, TFile, TFolder, normalizePath } from "obsidian";
+import { Notice, TFile, TFolder, Vault, normalizePath } from "obsidian";
 import type AudiobookshelfPlugin from "../main";
 import { AudiobookshelfApiError, AudiobookshelfClient } from "../api/client";
 import { Library, Series, UserMediaProgress } from "../api/types";
 import { renderTemplate } from "../template/render";
+import libraryNoteTemplate from "../templates/library-note.md";
 import seriesNoteTemplate from "../templates/series-note.md";
 
 interface RenderedBook {
 	id: string;
 	title: string;
+	description: string;
 	coverUrl: string;
 	authorName: string;
 	publishedYear: string;
@@ -19,11 +21,17 @@ interface RenderedBook {
 interface RenderedSeries {
 	id: string;
 	name: string;
+	description: string;
 	bookCount: number;
 	finishedBookCount: number;
 	totalDurationHours: string;
 	progressDurationHours: string;
 	books: RenderedBook[];
+}
+
+interface RenderedSeriesWithNoteLink extends RenderedSeries {
+	/** Wikilink target: vault-relative path without `.md`. */
+	seriesNotePath: string;
 }
 
 interface TemplateContext {
@@ -32,7 +40,16 @@ interface TemplateContext {
 	serverUrl: string;
 	libraryCount: number;
 	seriesCount: number;
-	series: RenderedSeries[];
+	series: RenderedSeriesWithNoteLink[];
+}
+
+interface IndividualSeriesTemplateContext {
+	libraryTitle: string;
+	/** Vault folder segment derived from library name (path-forbidden chars only replaced). */
+	libraryFolderName: string;
+	generatedAt: string;
+	serverUrl: string;
+	series: RenderedSeries;
 }
 
 export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<void> {
@@ -86,9 +103,13 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 
 	const libraryNameById = new Map(libraries.map((library) => [library.id, library.name]));
 
-	let template: string;
+	let libraryTemplate: string;
+	let seriesTemplate: string;
 	try {
-		template = await resolveTemplate(plugin);
+		[libraryTemplate, seriesTemplate] = await Promise.all([
+			resolveLibraryTemplate(plugin),
+			resolveSeriesTemplate(plugin),
+		]);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
 		new Notice(`Audiobookshelf: template render failed — ${msg}`);
@@ -103,46 +124,158 @@ export async function generateSeriesNote(plugin: AudiobookshelfPlugin): Promise<
 			return;
 		}
 	}
-	let filesWritten = 0;
-	let totalSeriesWritten = 0;
+	let libraryFilesWritten = 0;
+	let seriesFilesWritten = 0;
+	const generatedAt = new Date().toLocaleString();
+
 	for (const [index, libraryId] of settings.libraryIds.entries()) {
-		const librarySeries = [...(perLibrary[index] ?? [])];
-		librarySeries.sort((a, b) => a.name.localeCompare(b.name));
-		const libraryTitle = libraryNameById.get(libraryId) ?? libraryId;
+		try {
+			const librarySeries = [...(perLibrary[index] ?? [])];
+			librarySeries.sort((a, b) => a.name.localeCompare(b.name));
+			const libraryTitle = libraryNameById.get(libraryId) ?? libraryId;
+			const libraryFolderName = filesystemSegmentFromLibraryName(libraryTitle);
+			const librarySeriesDir = folderPath
+				? normalizePath(`${folderPath}/${libraryFolderName}`)
+				: libraryFolderName;
 
-		const context: TemplateContext = {
-			libraryTitle,
-			generatedAt: new Date().toLocaleString(),
-			serverUrl: settings.serverUrl,
-			libraryCount: settings.libraryIds.length,
-			seriesCount: librarySeries.length,
-			series: librarySeries.map((series) =>
-				toRenderedSeries(series, progressByLibraryItemId, settings.serverUrl),
-			),
-		};
+			await ensureFolderPath(app.vault, librarySeriesDir);
 
-		const rendered = renderTemplate(template, context);
-		const outputFileName = buildLibraryFileName(settings.outputFileName, libraryTitle);
-		const filePath = normalizePath(folderPath ? `${folderPath}/${outputFileName}` : outputFileName);
+			const usedSeriesStems = new Set<string>();
+			const seriesForRollup: RenderedSeriesWithNoteLink[] = [];
 
-		const existing = app.vault.getAbstractFileByPath(filePath);
-		if (existing instanceof TFile) {
-			await app.vault.modify(existing, rendered);
-		} else {
-			await app.vault.create(filePath, rendered);
+			for (const series of librarySeries) {
+				const rendered = toRenderedSeries(series, progressByLibraryItemId, settings.serverUrl);
+				const stem = uniqueSeriesNoteStem(series, usedSeriesStems);
+				const seriesNotePathMd = normalizePath(`${librarySeriesDir}/${stem}.md`);
+				const seriesNotePath = vaultPathWithoutExtension(seriesNotePathMd);
+
+				const individualContext: IndividualSeriesTemplateContext = {
+					libraryTitle,
+					libraryFolderName,
+					generatedAt,
+					serverUrl: settings.serverUrl,
+					series: rendered,
+				};
+				const individualRendered = renderTemplate(seriesTemplate, individualContext);
+
+				const existingSeries = app.vault.getAbstractFileByPath(seriesNotePathMd);
+				if (existingSeries instanceof TFile) {
+					await app.vault.modify(existingSeries, individualRendered);
+				} else {
+					await app.vault.create(seriesNotePathMd, individualRendered);
+				}
+				seriesFilesWritten += 1;
+
+				seriesForRollup.push({ ...rendered, seriesNotePath });
+			}
+
+			const context: TemplateContext = {
+				libraryTitle,
+				generatedAt,
+				serverUrl: settings.serverUrl,
+				libraryCount: settings.libraryIds.length,
+				seriesCount: seriesForRollup.length,
+				series: seriesForRollup,
+			};
+
+			const renderedRollup = renderTemplate(libraryTemplate, context);
+			const rollupRelative = buildLibraryRollupRelativePath(settings.outputFileName, libraryTitle);
+			const rollupPath = normalizePath(folderPath ? `${folderPath}/${rollupRelative}` : rollupRelative);
+			const rollupDir = vaultDirectoryForFile(rollupPath);
+			if (rollupDir) {
+				await ensureFolderPath(app.vault, rollupDir);
+			}
+
+			const existingRollup = app.vault.getAbstractFileByPath(rollupPath);
+			if (existingRollup instanceof TFile) {
+				await app.vault.modify(existingRollup, renderedRollup);
+			} else {
+				await app.vault.create(rollupPath, renderedRollup);
+			}
+			libraryFilesWritten += 1;
+		} catch (err) {
+			const libraryTitle = libraryNameById.get(libraryId) ?? libraryId;
+			const msg = err instanceof Error ? err.message : String(err);
+			new Notice(`Audiobookshelf: stopped on library "${libraryTitle}" — ${msg}`);
+			return;
 		}
-		filesWritten += 1;
-		totalSeriesWritten += librarySeries.length;
 	}
 
-	new Notice(`Audiobookshelf: wrote ${totalSeriesWritten} series across ${filesWritten} files.`);
+	new Notice(
+		`Audiobookshelf: wrote ${libraryFilesWritten} library overview(s) and ${seriesFilesWritten} series note(s).`,
+	);
 }
 
-function buildLibraryFileName(baseFileName: string, libraryTitle: string): string {
-	const template = baseFileName.trim() || "{{libraryName}} Series";
-	const safeLibraryName = libraryTitle.replace(/[\\/:"*?<>|]/g, "-").trim() || "Library";
-	const resolved = template.split("{{libraryName}}").join(safeLibraryName).trim();
+/** Vault-relative markdown path under folder location (may include `/`). */
+function buildLibraryRollupRelativePath(pattern: string, libraryTitle: string): string {
+	const template = pattern.trim() || "{{libraryName}}/All Series";
+	const safeLibrarySegment = filesystemSegmentFromLibraryName(libraryTitle);
+	const resolved = template.split("{{libraryName}}").join(safeLibrarySegment).trim();
 	return resolved.toLowerCase().endsWith(".md") ? resolved : `${resolved}.md`;
+}
+
+/** Parent folder path inside the vault, or null if file would live directly in a root folder. */
+function vaultDirectoryForFile(filePath: string): string | null {
+	const normalized = normalizePath(filePath);
+	const slash = normalized.lastIndexOf("/");
+	return slash <= 0 ? null : normalized.slice(0, slash);
+}
+
+/** Path segment matching the Audiobookshelf library name aside from forbidden path characters. */
+function filesystemSegmentFromLibraryName(libraryTitle: string): string {
+	const trimmed = libraryTitle.trim();
+	if (!trimmed) {
+		return "Library";
+	}
+	return trimmed.replace(/[\\/:"*?<>|]/g, "-");
+}
+
+function vaultPathWithoutExtension(pathToFile: string): string {
+	const normalized = normalizePath(pathToFile);
+	return normalized.toLowerCase().endsWith(".md") ? normalized.slice(0, -".md".length) : normalized;
+}
+
+async function ensureFolderPath(vault: Vault, folderPath: string): Promise<void> {
+	const parts = normalizePath(folderPath)
+		.split("/")
+		.filter((p) => p.length > 0);
+	let acc = "";
+	for (const part of parts) {
+		acc = acc ? normalizePath(`${acc}/${part}`) : part;
+		const existing = vault.getAbstractFileByPath(acc);
+		if (existing instanceof TFolder) {
+			continue;
+		}
+		if (existing instanceof TFile) {
+			throw new Error(`"${acc}" exists as a file; cannot create folder.`);
+		}
+		await vault.createFolder(acc);
+	}
+}
+
+function uniqueSeriesNoteStem(series: Series, usedStems: Set<string>): string {
+	const base =
+		filesystemSegmentFromLibraryName(series.name) ||
+		filesystemSegmentFromLibraryName(series.id) ||
+		"Series";
+	let stem = base;
+	if (!usedStems.has(stem)) {
+		usedStems.add(stem);
+		return stem;
+	}
+	const suffix = series.id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 12) || "dup";
+	stem = `${base}-${suffix}`;
+	if (!usedStems.has(stem)) {
+		usedStems.add(stem);
+		return stem;
+	}
+	let n = 2;
+	while (usedStems.has(`${stem}-${n}`)) {
+		n += 1;
+	}
+	const finalStem = `${stem}-${n}`;
+	usedStems.add(finalStem);
+	return finalStem;
 }
 
 function normalizeFolderPath(folderLocation: string): string {
@@ -153,8 +286,22 @@ function normalizeFolderPath(folderLocation: string): string {
 	return normalizePath(value.replace(/^\/+/, ""));
 }
 
-async function resolveTemplate(plugin: AudiobookshelfPlugin): Promise<string> {
-	const templatePath = plugin.settings.templateFilePath?.trim() ?? "";
+async function resolveLibraryTemplate(plugin: AudiobookshelfPlugin): Promise<string> {
+	const templatePath = plugin.settings.libraryTemplateFilePath?.trim() ?? "";
+	if (!templatePath) {
+		return libraryNoteTemplate;
+	}
+
+	const file = plugin.app.vault.getAbstractFileByPath(templatePath);
+	if (!(file instanceof TFile)) {
+		return libraryNoteTemplate;
+	}
+
+	return await plugin.app.vault.cachedRead(file);
+}
+
+async function resolveSeriesTemplate(plugin: AudiobookshelfPlugin): Promise<string> {
+	const templatePath = plugin.settings.seriesTemplateFilePath?.trim() ?? "";
 	if (!templatePath) {
 		return seriesNoteTemplate;
 	}
@@ -187,6 +334,7 @@ function toRenderedSeries(
 		return {
 			id: book.id,
 			title: meta.title ?? "",
+			description: typeof meta.description === "string" ? meta.description.trim() : "",
 			coverUrl: buildBookCoverUrl(normalizedServerUrl, book.id),
 			authorName: meta.authorName ?? "",
 			publishedYear: meta.publishedYear ?? "",
@@ -212,12 +360,26 @@ function toRenderedSeries(
 	return {
 		id: series.id,
 		name: series.name,
+		description: getSeriesDescription(series),
 		bookCount: books.length,
 		finishedBookCount,
 		totalDurationHours: formatHours(totalSeconds),
 		progressDurationHours: formatHours(progressSeconds),
 		books,
 	};
+}
+
+function getSeriesDescription(series: Series): string {
+	if (typeof series.description === "string" && series.description.trim().length > 0) {
+		return series.description.trim();
+	}
+	for (const book of series.books ?? []) {
+		const metaDescription = book.media?.metadata?.description;
+		if (typeof metaDescription === "string" && metaDescription.trim().length > 0) {
+			return metaDescription.trim();
+		}
+	}
+	return "";
 }
 
 function buildBookCoverUrl(serverUrl: string, bookId: string): string {

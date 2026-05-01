@@ -122,7 +122,9 @@ export class AudiobookshelfSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Folder location")
-			.setDesc("Choose the folder where the note is created.")
+			.setDesc(
+				"Folder for library overview notes. Each series note is written under `{folder}/{library name}/` (only characters invalid in paths are substituted).",
+			)
 			.addSearch((search) => {
 				search
 					.setPlaceholder("Example: Reading")
@@ -138,14 +140,18 @@ export class AudiobookshelfSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Template file")
-			.setDesc("Choose a markdown template file from your vault. Leave empty to use the built-in template.")
+			.setName("Library template")
+			.setDesc(
+				"Markdown template for the per-library overview note. Leave empty to use the built-in template.",
+			)
 			.addSearch((search) => {
 				search
-					.setPlaceholder("Example: Templates/audiobookshelf-series-template.md")
-					.setValue(this.plugin.settings.templateFilePath)
+					.setPlaceholder("Example: Templates/audiobookshelf-library-template.md")
+					.setValue(this.plugin.settings.libraryTemplateFilePath)
 					.onChange(async (value) => {
-						this.plugin.settings.templateFilePath = normalizePath(value.trim().replace(/^\/+/, ""));
+						this.plugin.settings.libraryTemplateFilePath = normalizePath(
+							value.trim().replace(/^\/+/, ""),
+						);
 						await this.plugin.saveSettings();
 					});
 
@@ -153,21 +159,44 @@ export class AudiobookshelfSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Output file name")
-			.setDesc("File name template for generated notes. Use {{libraryName}} to include the library name.")
+			.setName("Series template")
+			.setDesc(
+				"Markdown template for individual series notes. Leave empty to use the built-in template.",
+			)
+			.addSearch((search) => {
+				search
+					.setPlaceholder("Example: Templates/audiobookshelf-series-template.md")
+					.setValue(this.plugin.settings.seriesTemplateFilePath)
+					.onChange(async (value) => {
+						this.plugin.settings.seriesTemplateFilePath = normalizePath(
+							value.trim().replace(/^\/+/, ""),
+						);
+						await this.plugin.saveSettings();
+					});
+
+				new TemplateFileSuggest(this.app, search.inputEl);
+			});
+
+		new Setting(containerEl)
+			.setName("Library overview path")
+			.setDesc(
+				"Vault-relative path from the folder above for each library rollup (supports nested paths with `{{libraryName}}/…`). Individual series filenames are unchanged.",
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder("{{libraryName}} Series")
+					.setPlaceholder("{{libraryName}}/All Series")
 					.setValue(this.plugin.settings.outputFileName)
 					.onChange(async (value) => {
-						this.plugin.settings.outputFileName = value.trim() || "{{libraryName}} Series";
+						this.plugin.settings.outputFileName = value.trim() || "{{libraryName}}/All Series";
 						await this.plugin.saveSettings();
 					}),
 			);
 
 		new Setting(containerEl)
 			.setName("Libraries")
-			.setDesc("Select which libraries to include in the generated note.")
+			.setDesc(
+				"Libraries to sync. Each run writes one overview note plus one note per series under that library subfolder.",
+			)
 			.addButton((btn) =>
 				btn
 					.setButtonText("Fetch libraries")

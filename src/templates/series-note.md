@@ -1,20 +1,28 @@
 ---
-generatedAt: "{{generatedAt}}"
+createdAt: "{{generatedAt}}"
 serverUrl: "{{serverUrl}}"
-seriesCount: {{seriesCount}}
 ---
-# {{libraryTitle}} series
-{{seriesCount}} series
+# {{series.name}}
 
-{{#each series}}
+{{#if series.description}}
+{{series.description}}
 
-> [!book-open]+ {{name}}
-> 
-> Books: {{finishedBookCount}} / {{bookCount}}
-> Duration: {{progressDurationHours}} h / {{totalDurationHours}} h
-> ---
-> {{#each books}}
-> :{{statusIcon}}: **{{title}}** by {{authorName}}
-> {{/each}}
+{{/if}}
 
+---
+
+Books: {{series.finishedBookCount}} / {{series.bookCount}}
+Duration: {{series.progressDurationHours}} h / {{series.totalDurationHours}} h
+
+{{#each series.books}}
+
+> [!{{statusIcon}}]+ {{title}}
+>
+> Status: :{{statusIcon}}:
+> Author: {{authorName}}
+>
+> {{#if description}}
+> {{description}}
+> {{/if}}
+>
 {{/each}}

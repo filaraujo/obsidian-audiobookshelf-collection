@@ -7,9 +7,14 @@ export interface AudiobookshelfSettings {
 	libraryIds: string[];
 	/** Vault-relative folder path where the note should be written. Empty means vault root. */
 	folderLocation: string;
-	/** Vault-relative template file path. Empty means use the built-in template. */
-	templateFilePath: string;
-	/** File name template for generated notes. Supports {{libraryName}}. */
+	/** Vault-relative template for the library rollup note. Empty means built-in. */
+	libraryTemplateFilePath: string;
+	/** Vault-relative template for individual series notes. Empty means built-in. */
+	seriesTemplateFilePath: string;
+	/**
+	 * Vault-relative path (from folder location) for the library rollup note.
+	 * Supports `{{libraryName}}` (filesystem-safe segment matching the Audiobookshelf library name).
+	 */
 	outputFileName: string;
 }
 
@@ -18,6 +23,7 @@ export const DEFAULT_SETTINGS: AudiobookshelfSettings = {
 	apiToken: "",
 	libraryIds: [],
 	folderLocation: "",
-	templateFilePath: "",
-	outputFileName: "{{libraryName}} Series",
+	libraryTemplateFilePath: "",
+	seriesTemplateFilePath: "",
+	outputFileName: "{{libraryName}}/All Series",
 };

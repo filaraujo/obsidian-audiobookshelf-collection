@@ -28,7 +28,7 @@ Open **Settings → Audiobookshelf Collection** and fill in:
 
 - **Server URL** — the base URL of your Audiobookshelf server (no trailing slash), e.g. `https://abs.example.com`.
 - **API token** — copy this from your Audiobookshelf user profile.
-- **Output file name** — file name template for generated notes (supports `{{libraryName}}`; default is `{{libraryName}} Series`).
+- **Library overview path** — vault-relative path under the folder below (supports `{{libraryName}}` and slashes; default is `{{libraryName}}/All Series`).
 - **Libraries** — click **Fetch libraries** to load them from the server, then toggle the ones you want.
 
 ## Generating the note
@@ -38,11 +38,11 @@ Run **Generate series note** from the command palette, or click the book ribbon 
 1. Calls `GET /api/libraries/{id}/series` for each selected library.
 2. Sorts series alphabetically.
 3. Renders the template with the resulting context.
-4. Writes the file into the parent folder of the currently open note (or the vault root if no note is open). If the file already exists it is overwritten.
+4. Writes the library overview (`All Series` by default) and individual series notes into the vault folder configured in settings. Existing files are overwritten.
 
 ## Modifying the template
 
-The template lives at [src/templates/series-note.md](src/templates/series-note.md). Edit it and run `npm run build` to refresh `dist/main.js` (and copied assets).
+The library rollup template lives at [src/templates/library-note.md](src/templates/library-note.md), and the individual series template lives at [src/templates/series-note.md](src/templates/series-note.md). Edit them and run `npm run build` to refresh `dist/main.js` (and copied assets).
 
 The renderer supports a small Handlebars-flavored syntax:
 
@@ -96,7 +96,8 @@ src/
   api/client.ts                 Audiobookshelf HTTP client (requestUrl)
   api/types.ts                  Minimal API response types
   template/render.ts            Mustache/handlebars-flavored renderer
-  templates/series-note.md      Default note template (bundled by esbuild)
+  templates/library-note.md     Default library rollup template (bundled by esbuild)
+  templates/series-note.md      Default individual series template (bundled by esbuild)
   commands/generateSeriesNote.ts Command implementation
 ```
 

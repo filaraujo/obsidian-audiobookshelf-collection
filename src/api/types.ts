@@ -8,6 +8,7 @@ export interface SeriesBookMetadata {
 	title?: string;
 	authorName?: string;
 	publishedYear?: string;
+	description?: string;
 	series?: {
 		id?: string;
 		name?: string;
@@ -59,6 +60,7 @@ export interface Series {
 	books: SeriesBook[];
 	totalDuration?: number | string;
 	addedAt?: number;
+	description?: string;
 }
 
 export interface SeriesResponse {
