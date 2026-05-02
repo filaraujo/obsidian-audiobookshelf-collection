@@ -8,9 +8,9 @@ import {
 	TFolder,
 	normalizePath,
 } from "obsidian";
-import type AudiobookshelfPlugin from "../main";
-import { AudiobookshelfClient, AudiobookshelfApiError } from "../api/client";
+import { AudiobookshelfApiError, AudiobookshelfClient } from "../api/client";
 import { Library } from "../api/types";
+import type AudiobookshelfPlugin from "../main";
 
 class FolderSuggest extends AbstractInputSuggest<string> {
 	private readonly folders: string[];
@@ -127,7 +127,8 @@ export class AudiobookshelfSettingTab extends PluginSettingTab {
 			)
 			.addSearch((search) => {
 				search
-					.setPlaceholder("Example: Reading")
+					// eslint-disable-next-line obsidianmd/ui/sentence-case -- path example, not a sentence
+					.setPlaceholder("Example: /Reading")
 					.setValue(this.plugin.settings.folderLocation || "/")
 					.onChange(async (value) => {
 						const normalizedValue = value.trim();

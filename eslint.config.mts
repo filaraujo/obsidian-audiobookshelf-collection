@@ -12,9 +12,12 @@ export default tseslint.config(
 			parserOptions: {
 				projectService: {
 					allowDefaultProject: [
-						'eslint.config.js',
-						'manifest.json'
-					]
+						"eslint.config.mts",
+						"eslint.config.js",
+						"manifest.json",
+						"vitest.config.ts",
+						"vitest.obsidian.stub.ts",
+					],
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json']
@@ -22,6 +25,18 @@ export default tseslint.config(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		files: ["vitest.config.ts"],
+		languageOptions: {
+			globals: {
+				...globals.node,
+			},
+		},
+		rules: {
+			"import/no-nodejs-modules": "off",
+			"obsidianmd/hardcoded-config-path": "off",
+		},
+	},
 	globalIgnores([
 		"node_modules",
 		"dist",
