@@ -1,9 +1,9 @@
 {
 	"id": "audiobookshelf-collection",
-	"name": "AudiobookShelf Collection",
+	"name": "Audiobookshelf Collection",
 	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
-	"description": "A plugin that generate a notes that lists the books in your AudiobookShelf collection.",
+	"minAppVersion": "1.4.10",
+	"description": "Generate notes that list the series and books in your Audiobookshelf libraries.",
 	"author": "Filipe Araujo",
 	"isDesktopOnly": false
 }

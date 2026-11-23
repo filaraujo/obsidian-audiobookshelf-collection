@@ -9,7 +9,19 @@ Obsidian plugin that connects to an [Audiobookshelf](https://www.audiobookshelf.
 - One command (and ribbon icon) syncs library overviews and per-series notes into the folder you configure.
 - Optional vault paths for library and series templates; otherwise the built-in markdown templates bundled with the plugin are used.
 
-## Setup
+## Installation
+
+Requires Obsidian 1.4.10 or later.
+
+### From community plugins
+
+Once the plugin is listed in the community directory:
+
+1. Open **Settings → Community plugins** and turn on community plugins if needed.
+2. Select **Browse** and search for **Audiobookshelf Collection**.
+3. Select **Install**, then **Enable**.
+
+### From source
 
 1. Install build dependencies and build the plugin:
   ```bash
@@ -100,3 +112,7 @@ Output is plain text/markdown; no HTML escaping is applied. Missing values rende
 ## Privacy
 
 The plugin only contacts the Audiobookshelf server you configure. It does not transmit data anywhere else. No telemetry, no analytics.
+
+Requests include your API token and go to the server URL you enter. Use HTTPS where possible so the token is encrypted in transit.
+
+Settings, including the API token, are stored unencrypted in `.obsidian/plugins/audiobookshelf-collection/data.json` inside your vault. If you sync, share, or commit your vault, that file may be included.
